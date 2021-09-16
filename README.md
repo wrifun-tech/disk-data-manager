@@ -13,7 +13,7 @@
 
 ### Download and Install
 1) Native Program.
-- For Windows, Download [installer]() or [portable version]().
+- For Windows, Download [installer](https://github.com/wrifun-tech/storage-data-manager/releases/download/v1.0.0/StorageDataManager-Setup-1.0.0.exe) or [portable version](https://github.com/wrifun-tech/storage-data-manager/releases/download/v1.0.0/StorageDataManager-v1.0.0-portable.exe).
 - For Linux or Mac osx, still in testing phase, will be coming soon.
 
 2) Alternatively. 
