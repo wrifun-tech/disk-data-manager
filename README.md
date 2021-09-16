@@ -27,5 +27,8 @@
 ### Let's take a look by watching a video.
 https://user-images.githubusercontent.com/90248822/133627177-3ff6a770-d958-400b-8f2e-1e24f50cfcda.mp4
 
+### Powered by
+<a href="https://www.wrifun.com"><img src="https://static.wrifun.com/medias/images/logo.png" width="60" alt="Wrifun" /></a>
+
 ### License
 GNU GPLv3
