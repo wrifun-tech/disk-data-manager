@@ -8,7 +8,7 @@
  - Move data between categories.
  - Query file info, at the moment only support movie/tv related stuff (Backed by TMDb, you'll need to supply your own TMDb token if you want to use this feature. [How to get it](https://developers.themoviedb.org/3/getting-started/introduction)). We'll also support music and game stuff very soon. PRs are welcome. 
  - For video file, there you can build your watchlist and watch history. 
- - Localized. But now there are only English and Simplified-Chinese. If you want to translate into your language, please send a PR. Check out data/localization directory, you will have a clue how to archive it.
+ - Localized. But now there are only English and Simplified-Chinese. If you want to translate into your language, please send a PR. Check out data/localization directory, you will have a clue how to achieve it.
  - There are still some other little sugar pies, Come and try it😆.
 
 ### Download and Install
