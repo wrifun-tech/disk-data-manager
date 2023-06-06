@@ -156,8 +156,83 @@ function getValue (obj, route) {
   return returnValue
 
 }
+function urlParamsToObj (params) {
+  const obj = {}
+  const sStringSplits = params.split('&').filter(item => item.trim() !== '')
 
+  sStringSplits.forEach(item => {
+    const equalIndex = item.indexOf('=')
+    const hasSign = equalIndex >= 0
+    const prop =  item.substring(0, hasSign ? equalIndex : item.length)
+    const propVal = hasSign ? item.substring(equalIndex + 1) : ''
+    obj[prop] = decodeURIComponent(propVal)
+  })
+  return obj
+}
+
+function toIsoString(date) {
+  var tzo = -date.getTimezoneOffset(),
+      dif = tzo >= 0 ? '+' : '-',
+      pad = function(num) {
+          return (num < 10 ? '0' : '') + num;
+      };
+
+  return date.getFullYear() +
+      '-' + pad(date.getMonth() + 1) +
+      '-' + pad(date.getDate()) +
+      'T' + pad(date.getHours()) +
+      ':' + pad(date.getMinutes()) +
+      ':' + pad(date.getSeconds()) +
+      dif + pad(Math.floor(Math.abs(tzo) / 60)) +
+      ':' + pad(Math.abs(tzo) % 60);
+}
+function countOccurrences (params) {
+  const {list, asPropName = 'name'} = params || {}
+  const findDup = list
+      .reduce((dupRes, item) => {
+        const isItemObj = typeof item === 'object'
+        const toCompareName = isItemObj ? item[asPropName] : item
+        let findItem = dupRes.find(dItem => dItem.name === toCompareName)
+        if (!findItem) {
+          findItem = {...(isItemObj ? item : {}), name: toCompareName, count: 1}
+          dupRes.push(findItem)
+        }
+        else {findItem.count++}
+        return dupRes
+      }, [])
+      .sort((a, b) => {
+        if (b.count > a.count) return 1;
+        return -1;
+      })
+
+
+  const res = {listSortedByOccurrences: findDup, dupMax: null}
+  if (findDup[0] && findDup[0].count > 1) {
+    res.dupMax = findDup[0]
+  }
+  // console.log(`countOccurrences RES `, res)
+  return res
+}
+function objectPickKeys (obj, keys) {
+  const objToReturn = {}
+  Object.keys(obj).forEach(key => {
+    if (keys.includes(key)) {
+      objToReturn[key] = obj[key]
+    }
+  })
+  return objToReturn
+}
+
+function objectOmitKeys (obj, keys) {
+  Object.keys(obj).forEach(key => {
+    if (keys.includes(key)) {
+      delete obj[key]
+    }
+  })
+  return obj
+}
 module.exports = {
   removeInvalidKeys, cloneObj, byteLength, objToUrlParams, chunk,
-  validJson, fileSize, chunk, cleanFileName, getValue, isObject
+  validJson, fileSize, chunk, cleanFileName, getValue, isObject,
+  urlParamsToObj, toIsoString, countOccurrences, objectPickKeys, objectOmitKeys
 }

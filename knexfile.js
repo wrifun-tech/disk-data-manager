@@ -20,7 +20,7 @@ if (isSqlite) {
     console.log(`Sample database file: `, samplePath)
     if (fs.existsSync(samplePath)) {
       console.log(`Trying to rename sample DB file`)
-      fs.renameSync(samplePath, sqliteDbPath)
+      fs.copyFileSync(samplePath, sqliteDbPath)
     }
   }
 }

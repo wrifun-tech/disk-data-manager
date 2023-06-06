@@ -6,6 +6,7 @@ const {handleExtraJson, getDataType} = require('../utils/fileData')
 const {APP_COMMON_CONF, APP_OTHER_CONF} = require('../constant/common')
 const {tl} = require('../utils/locale')
 const {BrowserWindow} = require('electron')
+const {handlePathAndCategory} = require('./fs-controller')
 
 module.exports = {
   async getConfig (ctx) {
@@ -14,7 +15,7 @@ module.exports = {
     const deepScanPath = await db('deepscan_path')
     const fileExclusion = await db('file_exclusion')
     const collectionSymbol = await db('collection_symbol')
-    const {potentialDup, driveLabels, proxy, tmdbKey} = await handleExtraJson()
+    const {potentialDup, driveLabels, proxy, tmdbKey, clearDataBeforeAdding, keepThoseWatchedVideos, pathAndCategory, skipDriveLetter, skipPathForPathAndCategory} = await handleExtraJson()
     const formatFileName = await db('format_filename')
     const localeData = getLocaleData({locale})
     const res = {
@@ -22,9 +23,17 @@ module.exports = {
         dataTypes: getDataType({locale}).types,
         categories,
         deepScanPath,
-        fileExclusion, collectionSymbol, driveLabels, formatFileName: formatFileName,
+        fileExclusion,
+        collectionSymbol,
+        driveLabels,
+        formatFileName: formatFileName,
         proxy: proxy || '',
         tmdbKey,
+        clearDataBeforeAdding: clearDataBeforeAdding || 0,
+        keepThoseWatchedVideos: keepThoseWatchedVideos || 0,
+        pathAndCategory: pathAndCategory || [],
+        skipDriveLetter: skipDriveLetter || '',
+        skipPathForPathAndCategory: skipPathForPathAndCategory || [],
       },
       isClearingCacheAvailable: !!BrowserWindow
     }
@@ -37,7 +46,8 @@ module.exports = {
 
   async upSettings (ctx) {
     const params = ctx.request.body
-    const {prop, id, doRemove, name, dataTypeId, catId, potentialDup, replacing, locale, proxy, formatFileName, originalVal, tmdbKey} = params
+    const {prop, id, doRemove, name, dataTypeId, catId, potentialDup, replacing, locale, proxy, formatFileName, originalVal, tmdbKey, keepThoseWatchedVideos, clearDataBeforeAdding, pathAndCategory, skipDriveLetter, saveOnly, skipPathForPathAndCategory} = params
+    const boolPair = [0, 1]
     const upTypes = {
       category: {
         dbName: 'category',
@@ -102,6 +112,10 @@ module.exports = {
       proxy: {
 
       },
+      clearDataBeforeAdding: {},
+      keepThoseWatchedVideos: {},
+      pathAndCategory: {},
+      skipDriveLetter: {},
       formatFileName: {
         dbName: 'format_filename',
         dupPropName: 'name',
@@ -115,13 +129,14 @@ module.exports = {
       }
     }
     const upType = upTypes[prop]
-
+    // console.log(`boolPair clearDataBeforeAdding `, boolPair.includes(clearDataBeforeAdding))
     assert(upType, 'Invalid prop name.')
 
     const toUp = {}
     const dNow = new Date().toISOString()
     const res = {}
     const idName = upType.idName || 'id'
+
     let getItemByQuery
 
     if (upType.dbName === 'settings') {
@@ -147,6 +162,21 @@ module.exports = {
       await handleExtraJson({proxy: proxy.trim()})
     }
 
+    if (boolPair.includes(clearDataBeforeAdding)) {
+      await handleExtraJson({toUp: {clearDataBeforeAdding}})
+    }
+    if (boolPair.includes(keepThoseWatchedVideos)) {
+      await handleExtraJson({toUp: {keepThoseWatchedVideos}})
+    }
+    if (typeof skipDriveLetter === 'string') {
+      await handleExtraJson({toUp: {skipDriveLetter}})
+    }
+    if (pathAndCategory) {
+      await handleExtraJson({toUp: {pathAndCategory}})
+    }
+    if (skipPathForPathAndCategory) {
+      await handleExtraJson({toUp: {skipPathForPathAndCategory}})
+    }
     upType.extraIdCheck && await upType.extraIdCheck()
 
     if (id) {

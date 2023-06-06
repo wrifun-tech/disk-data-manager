@@ -73,7 +73,8 @@ function handleCategoryUI () {
         eSub.appendChild(subLabel)
       }
       renderSelection({
-        options: GLOBAL_DEF.driveSelectedCat.subCategories, el: eSub,
+        options: GLOBAL_DEF.driveSelectedCat.subCategories,
+        el: eSub,
         selection: GLOBAL_DEF.driveSelectedSubCat,
         onChange ({val}) {
           syncSelectedCategory({sId: Number(val)})
@@ -107,7 +108,8 @@ function handleCategoryUI () {
 
   syncSelectedCategory()
   renderSelection({
-    options: GLOBAL_DEF.allCategory(), el: eSelCategory,
+    options: GLOBAL_DEF.allCategory(),
+    el: eSelCategory,
     selection: GLOBAL_DEF.driveSelectedCat,
     insertBeforeEl: eEmpty,
     onChange ({val}) {
@@ -118,7 +120,7 @@ function handleCategoryUI () {
   renderSubSel()
 }
 
-function renderSelection ({options, valueProp, textProp, el, selection, onChange, insertBeforeEl}) {
+function renderSelection ({options, valueProp, textProp, el, selection, onChange, insertBeforeEl, selectedId}) {
   const rSel = el.querySelector('.st-data-select')
   if (rSel) {
     rSel.parentNode.removeChild(rSel)
@@ -137,6 +139,9 @@ function renderSelection ({options, valueProp, textProp, el, selection, onChange
       if (selection && selection[vProp] === Number(eOption.value)) {
         eOption.selected = true
       }
+      if (!isUndefined(selectedId) && selectedId === Number(eOption.value)) {
+        eOption.selected = true
+      }
       eOption.innerHTML = oItem[tProp] || ''
       eSelect.appendChild(eOption)
     }
@@ -144,20 +149,24 @@ function renderSelection ({options, valueProp, textProp, el, selection, onChange
 
   eSelect.addEventListener('change', (evt) => {
     const val = evt.target.value
-    onChange && onChange({val})
+    const optionItem = (options || []).find(oItem => oItem.id === Number(val))
+    onChange && onChange({val, optionItem})
   })
 }
 function syncSelectedCategory (params) {
   const {cId, sId} = params || {}
   const allCat = GLOBAL_DEF.allCategory()
+
   if (!GLOBAL_DEF.driveSelectedCat) {
     GLOBAL_DEF.driveSelectedCat = allCat[0]
   }
+
   if (!GLOBAL_DEF.driveSelectedSubCat && GLOBAL_DEF.driveSelectedCat) {
     if (GLOBAL_DEF.driveSelectedCat && GLOBAL_DEF.driveSelectedCat.subCategories && GLOBAL_DEF.driveSelectedCat.subCategories.length) {
       GLOBAL_DEF.driveSelectedSubCat = GLOBAL_DEF.driveSelectedCat.subCategories[0]
     }
   }
+
   if (cId) {
     const cSelection = allCat.find(fItem => fItem.id === cId)
     if (cSelection) {
@@ -166,14 +175,18 @@ function syncSelectedCategory (params) {
       syncSelectedCategory()
     }
   }
+
   if (sId && GLOBAL_DEF.driveSelectedCat && GLOBAL_DEF.driveSelectedCat.subCategories) {
     const cSelection = GLOBAL_DEF.driveSelectedCat.subCategories.find(fItem => fItem.id === sId)
     if (cSelection) {
       GLOBAL_DEF.driveSelectedSubCat = cSelection
     }
   }
+
+  console.log(`syncSelectedCategoryFunc `)
   if (GLOBAL_DEF.driveSelectedCat) {
     const findC = allCat.find(fItem => fItem.id === GLOBAL_DEF.driveSelectedCat.id)
+    console.log(`syncSelectedCategoryFunc `, allCat, findC)
     if (findC) {
       Object.assign(GLOBAL_DEF.driveSelectedCat, findC)
     }
@@ -183,6 +196,7 @@ function syncSelectedCategory (params) {
       syncSelectedCategory()
     }
   }
+
   if (GLOBAL_DEF.driveSelectedSubCat) {
     const fSub = GLOBAL_DEF.driveSelectedCat && GLOBAL_DEF.driveSelectedCat.subCategories && GLOBAL_DEF.driveSelectedCat.subCategories.find(fItem => fItem.id === GLOBAL_DEF.driveSelectedSubCat.id)
     if (fSub) {
@@ -191,6 +205,29 @@ function syncSelectedCategory (params) {
     else {
       GLOBAL_DEF.driveSelectedSubCat = null
       syncSelectedCategory()
+    }
+  }
+
+  if (GLOBAL_DEF.filter.category) {
+    const findIt = GLOBAL_DEF.allCategory().find(fItem => fItem.id === GLOBAL_DEF.filter.category.id)
+    console.log(`loadCategoryFunc `, findIt)
+    if (findIt) {
+      Object.assign(GLOBAL_DEF.filter.category, findIt)
+    }
+    else {
+      GLOBAL_DEF.filter.category = null
+    }
+    GLOBAL_DEF.subCategoryDisplayForFilter = GLOBAL_DEF.filter.category && GLOBAL_DEF.filter.category.subCategories || []
+  }
+
+  if (GLOBAL_DEF.filter.subCategory) {
+    const findIt = GLOBAL_DEF.filter.category && (GLOBAL_DEF.filter.category.subCategories || []).find(fItem => fItem.id === GLOBAL_DEF.filter.subCategory.id)
+    console.log(`loadSubCategoryFunc `, findIt)
+    if (findIt) {
+      Object.assign(GLOBAL_DEF.filter.subCategory, findIt)
+    }
+    else {
+      GLOBAL_DEF.filter.subCategory = null
     }
   }
 }
@@ -499,4 +536,779 @@ function renderAddingDataResult ({msgWp, countFound, countNewItems, dupItems}) {
       maxWpHeight: document.body.clientHeight * 0.67
     })
   }
+}
+
+function popupUpAllLocalDrives () {
+  syncPathAndCategoryConfig({doClone: true})
+  popBox({
+    noButton: true,
+    supportCloseBtn: true,
+    onRenderMsg: ({msgWp}) => {
+      const popBoxRect = msgWp.parentNode.getBoundingClientRect()
+      msgWp.style.paddingTop = 0
+
+      const clsName = 'popupUpAllLocalDrives'
+      const {el: rootEl} = createElement({
+        clsName: clsName + '-root',
+        appendToEl: msgWp
+      })
+      const {el: topEl} = createElement({
+        clsName: clsName + '-top',
+        appendToEl: rootEl
+      })
+      const rootPaddingBottom = 60
+      const rootPaddingTop = 38
+      rootEl.style.paddingBottom = rootPaddingBottom + 'px'
+      rootEl.style.paddingTop = rootPaddingTop + 'px'
+      topEl.style.height = rootPaddingTop + 'px'
+
+      const {el: titleEl} = createElement({
+        clsName: clsName + '-title',
+        appendToEl: topEl,
+        textCont: `${LNG.UpAllLocalDrivesTitle}`
+      })
+
+      const {el: containerEl} = createElement({
+        clsName: clsName + '-container',
+        appendToEl: rootEl
+      })
+      const hDiff = rootPaddingBottom + rootPaddingTop
+      containerEl.style.maxHeight = `${window.innerHeight * 0.76 - hDiff}px`
+
+      const {el: configWpEl} = createElement({
+        clsName: clsName + '-configWp',
+        appendToEl: containerEl,
+      })
+      const {el: configTitleEl} = createElement({
+        clsName: clsName + '-configTitle',
+        appendToEl: configWpEl,
+        textCont: `${LNG.ConfigPathAndCategory}`
+      })
+      const {el: configPathTipEl} = createElement({
+        clsName: clsName + '-configPathTip',
+        appendToEl: configWpEl,
+        textCont: `${LNG.PathValueTipOfPathAndCategory}`
+      })
+      const {el: configContentEl} = createElement({
+        clsName: clsName + '-configContent',
+        appendToEl: configWpEl,
+      })
+      const {el: addConfigEl} = createElement({
+        clsName: clsName + '-addConfig' + ` CursorPointer`,
+        appendToEl: configWpEl,
+        textCont: `${LNG.addConfig}`
+      })
+      addConfigEl.addEventListener('click', (evt) => {
+        const {hasErr} = checkPathAndCategory({useClone: true})
+        !hasErr && addPathAndCategoryElements({
+          wrapperEl: configContentEl,
+        })
+      })
+      refillPathAndCategory({
+        wrapperEl: configContentEl,
+      })
+      const {el: skipDriveLetterEl} = createElement({
+        clsName: clsName + '-skipDriveLetter',
+        appendToEl: containerEl,
+      })
+      const {el: skipDriveLetterLabelEl} = createElement({
+        clsName: clsName + '-skipDriveLetterLabel',
+        appendToEl: skipDriveLetterEl,
+        textCont: `${LNG.skipDriveLetter}`
+      })
+      const {el: skipDriveLetterInputEl} = createElement({
+        clsName: clsName + '-skipDriveLetterInput',
+        appendToEl: skipDriveLetterEl,
+        type: 'input',
+      })
+      skipDriveLetterInputEl.value = GLOBAL_DEF.skipDriveLetter
+      skipDriveLetterInputEl.addEventListener('input', (evt) => {
+        const sValue = evt.target.value.trim().replace(/(\s)+/gi, ' ')
+        syncPathAndCategoryConfig({skipDriveLetter: sValue})
+      })
+      skipDriveLetterInputEl.addEventListener('blur', (evt) => {
+        checkDriveLetter({letters: GLOBAL_DEF.skipDriveLetterClone})
+      })
+      const {el: skipDriveLetterTipEl} = createElement({
+        clsName: clsName + '-skipDriveLetterTip',
+        appendToEl: containerEl,
+        textCont: `${LNG.skipDriveLetterTip}`
+      })
+
+      const {el: skipPathEl} = createElement({
+        clsName: clsName + '-skipPathWp',
+        appendToEl: containerEl,
+      })
+      const {el: skipPathWpEl} = createElement({
+        clsName: clsName + '-skipPath',
+        appendToEl: skipPathEl,
+        textCont: `${LNG.skipPath}`
+      })
+      const {el: skipPathRightEl} = createElement({
+        clsName: clsName + '-skipPathRight',
+        appendToEl: skipPathEl,
+      })
+      const {el: skipPathInputWpEl} = createElement({
+        clsName: clsName + '-skipPathInputWp',
+        appendToEl: skipPathRightEl,
+      })
+      const {el: skipPathAddingEl} = createElement({
+        clsName: clsName + '-skipPathAdding',
+        appendToEl: skipPathRightEl,
+        textCont: `${LNG.Add}`
+      })
+      const skipPathInputCls = clsName + '-skipPathInput'
+      const skipPathInputRowCls = clsName + '-skipPathInputRow'
+      const addSkippingPathEl = ({initValue}) => {
+        const gotEmpty = GLOBAL_DEF.skipPathForPathAndCategoryClone.find(aItem => aItem.value.trim() === '')
+
+        if (gotEmpty) {
+          return handleToast({msg: LNG.cannotBeEmpty, showToast: true})
+        }
+
+        const {el: skipPathInputRow} = createElement({
+          clsName: skipPathInputRowCls,
+          appendToEl: skipPathInputWpEl,
+        })
+        const {el: skipPathInput} = createElement({
+          clsName: skipPathInputCls,
+          type: 'input',
+          appendToEl: skipPathInputRow,
+        })
+        if (initValue) {
+          skipPathInput.value = initValue
+        }
+        const {el: skipPathDel} = createElement({
+          clsName: clsName + '-skipPathDel',
+          type: 'img',
+          src: './medias/img/delete.png',
+          appendToEl: skipPathInputRow,
+        })
+        skipPathDel.addEventListener('click', (evt) => {
+          const tIndex = evt.target.parentNode.dataset.idx
+          syncPathAndCategoryConfig({
+            skipPathObj: {
+              sIndex: tIndex,
+              sDel: true,
+            },
+            onUpdate: ({}) => {
+              const elements = Array.from(skipPathInputWpEl.querySelectorAll(`.${skipPathInputRowCls}`))
+              for (let i = 0; i < elements.length; i++) {
+                const vEl = elements[i]
+                const vIdx = Number(tIndex)
+                console.log(`skipPathDel vIdx ${vIdx} i ${i}`)
+                if (i > vIdx) {
+                  vEl.dataset.idx = i-1
+                }
+              }
+              evt.target.parentNode.parentNode.removeChild(skipPathInputRow)
+            }
+          })
+        })
+        const idx = getSiblings({el: skipPathInputRow, dir: 'prev'}).length
+        skipPathInputRow.dataset.idx = idx
+        !initValue && syncPathAndCategoryConfig({addSkipPath: true})
+        skipPathInput.addEventListener('input', (evt) => {
+          const skipPathObj = {
+            sIndex: evt.target.parentNode.dataset.idx,
+            value: evt.target.value,
+          }
+          console.log(`skipPathInput CHANGE `, skipPathObj)
+          syncPathAndCategoryConfig({skipPathObj})
+        })
+      }
+
+      for (const sPathItem of GLOBAL_DEF.skipPathForPathAndCategory) {
+        addSkippingPathEl({initValue: sPathItem.value})
+      }
+
+      skipPathAddingEl.addEventListener('click', (evt) => {
+        addSkippingPathEl({})
+      })
+
+      const {el: bottomEl} = createElement({
+        clsName: clsName + '-bottom',
+        appendToEl: rootEl,
+      })
+      bottomEl.style.height = rootPaddingBottom + 'px'
+      const oBtnClsName = clsName + '-btn'
+      const {el: btnSave} = createElement({
+        clsName: `${oBtnClsName} ` + clsName + '-btnSaveOnly',
+        appendToEl: bottomEl,
+        textCont: `${LNG.save}`,
+      })
+      const onSubmit = (params) => {
+        const {saveOnly = false, onNext} = params || {}
+        const {hasErr} = checkPathAndCategory({useClone: true})
+        const {hasErr: withDriveLetterError} = checkDriveLetter({letters: GLOBAL_DEF.skipDriveLetterClone})
+        if (!hasErr && !withDriveLetterError) {
+          GLOBAL_DEF.skipPathForPathAndCategoryClone = GLOBAL_DEF.skipPathForPathAndCategoryClone.filter(item => item.value.trim() !== '')
+          syncPathAndCategoryConfig({doSave: true})
+          upDataType({
+            prop: 'pathAndCategory',
+            extra: {
+              pathAndCategory: GLOBAL_DEF.pathAndCategory,
+              skipDriveLetter: GLOBAL_DEF.skipDriveLetter,
+              skipPathForPathAndCategory: GLOBAL_DEF.skipPathForPathAndCategory,
+              saveOnly,
+            },
+            onSuccess (sData) {
+              closePopBox({})
+              handleToast({msg: LNG.upSuccessfully, showToast: true})
+              onNext && onNext({})
+            }
+          })
+        }
+      }
+      btnSave.addEventListener('click', (evt) => {
+        onSubmit({saveOnly: true})
+      })
+      const {el: btnConfirm} = createElement({
+        clsName: `${oBtnClsName} ` + clsName + '-btnConfirm',
+        appendToEl: bottomEl,
+        textCont: `${LNG.update}`,
+      })
+
+      btnConfirm.addEventListener('click', (evt) => {
+        onSubmit({
+          onNext: () => {
+            handleProgressOfUpdatingLocalDrives()
+          }
+        })
+      })
+      const {el: btnCancel} = createElement({
+        clsName: `${oBtnClsName} ` + clsName + '-btnCancel',
+        appendToEl: bottomEl,
+        textCont: `${LNG.Cancel}`,
+      })
+      btnCancel.addEventListener('click', (evt) => {
+        closePopBox({})
+      })
+    }
+  })
+}
+
+function refillPathAndCategory (params) {
+  const {wrapperEl} = params || {}
+  const pList = GLOBAL_DEF.pathAndCategory || []
+  for (let i = 0; i < pList.length; i++) {
+    const itemData = pList[i]
+    addPathAndCategoryElements({
+      wrapperEl,
+      itemData,
+    })
+  }
+}
+function checkDriveLetter (params) {
+  const {letters: l} = params || {}
+  const tLetters = l || GLOBAL_DEF.skipDriveLetter
+  let errorMsg = ''
+  const letters = tLetters.split(' ').filter(str => str !== '')
+  const reg = /^[a-zA-Z]$/
+  let dupLetter = ''
+
+  for (const letter of letters) {
+    if (errorMsg) break
+    const isValid = reg.test(letter)
+    console.log(`checkDriveLetter letter ${letter} REG `, isValid)
+    if (!isValid) {
+      errorMsg = `${LNG.singleAlphaLetterTip}`
+    }
+  }
+
+  if (!errorMsg) {
+    const {dupMax} = countOccurrences({list: letters})
+
+    if (dupMax) {
+      errorMsg = `${LNG.driveLetterDupTip}: ${dupMax.name}`
+    }
+  }
+  if (errorMsg) {
+    handleToast({msg: errorMsg, showToast: true})
+  }
+  const res = {hasErr: !!errorMsg}
+  return res
+}
+
+function checkPathAndCategory (params) {
+  const {doToast = true, useClone} = params || {}
+  const pathData = useClone ? GLOBAL_DEF.pathAndCategoryClone : GLOBAL_DEF.pathAndCategory
+  let errorMsg = ''
+
+  for (let i = 0; i < pathData.length; i++) {
+    if (errorMsg) break;
+    const itemData = pathData[i]
+    const nI = i + 1
+    console.log(`checkPathAndCategory itemData `, itemData)
+    if (itemData.path.trim() === '') {
+      errorMsg = `#${nI} ${LNG.path} ${LNG.cannotBeEmpty}`
+    }
+    if (!errorMsg) {
+      const isValid = !(/\?|\:|\"|\<|\>|\*/.test(itemData.path))
+      if (!isValid) {
+        errorMsg = `#${nI} ${LNG.PathValueShouldNotContainAnyFollowingCharacter}: ` + '?\:"<>*'
+      }
+    }
+  }
+  if (!errorMsg) {
+    const {dupMax} = countOccurrences({list: pathData, asPropName: 'path'})
+    if (dupMax) {
+      errorMsg = `${LNG.foundDupPathTip}: ${dupMax.path}`
+    }
+  }
+  if (errorMsg && doToast) {
+    handleToast({msg: errorMsg, showToast: true})
+  }
+  const res = {hasErr: !!errorMsg}
+  return res
+}
+function createElement (params) {
+  const {type = 'div', clsName, textCont, appendToEl, src} = params || {}
+  const el = document.createElement(type)
+  const res = {el}
+
+  if (clsName) {
+    el.className = res.clsName = clsName
+  }
+
+  if (textCont) {
+    el.textContent = textCont
+  }
+
+  if (src) {
+    el.src = src
+  }
+
+  if (appendToEl) {
+    appendToEl.appendChild(el)
+  }
+
+  return res;
+}
+function addPathAndCategoryElements ({wrapperEl, itemData}) {
+  const clsName = 'PathAndCategoryConfig'
+  const itemClsName = clsName + '-item'
+  const {el: itemEl} = createElement({
+    clsName: itemClsName,
+    appendToEl: wrapperEl
+  })
+  const assignItemIndex = (idx, nEl) => {
+    (nEl || itemEl).dataset.index = idx
+  }
+  let {length: seq} = getSiblings({el: itemEl, dir: 'prev'})
+  syncPathAndCategoryConfig({
+    idx: seq,
+  })
+  const {el: seqEl} = createElement({
+    clsName: clsName + '-seq',
+    appendToEl: itemEl,
+  })
+  const {el: seqCharEl} = createElement({
+    clsName: clsName + '-seqChar',
+    appendToEl: seqEl,
+    textCont: `#`
+  })
+  const seqNumCls = clsName + '-seqNum'
+  const {el: seqNumEl} = createElement({
+    clsName: seqNumCls,
+    appendToEl: seqEl,
+    textCont: `${++seq}`
+  })
+  const {el: pathWpEl} = createElement({
+    clsName: clsName + '-pathWp',
+    appendToEl: itemEl
+  })
+  const {el: pathLabelEl} = createElement({
+    clsName: clsName + '-pathLabel',
+    appendToEl: pathWpEl,
+    textCont: `${LNG.path}`
+  })
+  const {el: pathInputEl} = createElement({
+    type: 'input',
+    clsName: clsName + '-pathInput',
+    appendToEl: pathWpEl,
+  })
+
+  if (itemData) {pathInputEl.value = itemData.path}
+
+  pathInputEl.addEventListener('input', (evt) => {
+    const val = evt.target.value
+    const idx = getSiblings({el: itemEl, dir: 'prev'}).length
+    syncPathAndCategoryConfig({
+      idx, path: val,
+    })
+    console.log(`pathInputEl idx ${idx} `, val, )
+  })
+
+  const {el: sDel} = createElement({
+    type: 'img',
+    clsName: clsName + '-del' + ' CursorPointer',
+    appendToEl: itemEl,
+    src: './medias/img/delete.png'
+  })
+  assignItemIndex(seq)
+  sDel.addEventListener('click', (evt) => {
+    const idx = getSiblings({el: itemEl, dir: 'prev'}).length
+    syncPathAndCategoryConfig({
+      idx, doDel: true,
+      onUpdate: ({data: itemsData}) => {
+        const elements = Array.from(wrapperEl.querySelectorAll(`.${itemClsName}`))
+        for (let i = 0; i < elements.length; i++) {
+          if (i > idx) {
+            const tEl = elements[i]
+            const itemData = itemsData[i]
+
+            if (tEl) {
+              assignItemIndex(i, tEl)
+              const seqNumElement = tEl.querySelector(`.${seqNumCls}`)
+              seqNumElement && (seqNumElement.textContent = i)
+            }
+            console.log(`onUpdate i ${i} idx ${idx} itemData `, itemData)
+          }
+        }
+        itemEl.parentNode.removeChild(itemEl)
+      }
+    })
+  })
+
+  const addCategoryEl = ({isSub, options, selectedId}) => {
+    const {el: categoryWpEl, clsName: categoryWpClsName} = createElement({
+      clsName: clsName + '-categoryWp' + (isSub ? ` subItem` : ''),
+      appendToEl: itemEl,
+    })
+    const {el: categoryLabelEl} = createElement({
+      clsName: clsName + '-categoryLabel',
+      appendToEl: categoryWpEl,
+      textCont: isSub ? `${LNG.subCategory}` : `${LNG.category}`,
+    })
+    const {el: categorySelectionEl} = createElement({
+      clsName: clsName + '-categorySelection',
+      appendToEl: categoryWpEl,
+    })
+    const categories = GLOBAL_DEF.allCategory()
+    const paramsForRendering = {
+      options: options || categories,
+      el: categoryWpEl,
+      selectedId,
+    }
+    renderSelection({
+      ...paramsForRendering,
+      onChange ({val, optionItem}) {
+        console.log(`Selection change optionItem `, optionItem)
+        const isDefault = val < 0
+        const subCatEl = itemEl.querySelector(`.${categoryWpClsName}.subItem`)
+        const removeSubCatEl = () => {
+          subCatEl && subCatEl.parentNode.removeChild(subCatEl)
+        }
+        if (isDefault) {
+          !isSub && removeSubCatEl()
+        }
+        if (!isDefault) {
+          if (!isSub) {
+            removeSubCatEl()
+            const selectedCat = categories[val]
+            const sItems = selectedCat.subCategories || []
+            appendDefaultSelectionItem(sItems)
+            addCategoryEl({
+              isSub: true,
+              options: sItems,
+            })
+          }
+        }
+        const idx = getSiblings({el: itemEl, dir: 'prev'}).length
+        syncPathAndCategoryConfig({
+          idx, category: optionItem, isSubCategory: isSub,
+        })
+      }
+    })
+  }
+  addCategoryEl({
+    selectedId: itemData && itemData.categoryId,
+  })
+  if (itemData && itemData.categoryId) {
+    const cItem = GLOBAL_DEF.allCategory().find(aItem => aItem.id === itemData.categoryId)
+    const subItems = cItem && cItem.subCategories || []
+    appendDefaultSelectionItem(subItems)
+    addCategoryEl({
+      selectedId: itemData && itemData.subCategoryId,
+      isSub: true,
+      options: subItems,
+    })
+  }
+}
+function appendDefaultSelectionItem (items) {
+  const findDef = items.find(sItem => sItem.id === -1)
+  !findDef && items.unshift(DEF_CATEGORY_ITEM())
+}
+function syncPathAndCategoryConfig (params) {
+  const {idx, path, category, isSubCategory, doClone, doDel, doSave, onUpdate, skipDriveLetter, addSkipPath, skipPathObj} = params || {}
+
+  if (doClone) {
+    GLOBAL_DEF.pathAndCategoryClone = JSON.parse(JSON.stringify(GLOBAL_DEF.pathAndCategory))
+    GLOBAL_DEF.skipDriveLetterClone = GLOBAL_DEF.skipDriveLetter
+    GLOBAL_DEF.skipPathForPathAndCategoryClone = JSON.parse(JSON.stringify(GLOBAL_DEF.skipPathForPathAndCategory))
+  }
+
+  const data = GLOBAL_DEF.pathAndCategoryClone
+  let itemData = data[idx]
+
+  if (!isUndefined(idx) && !itemData) {
+    itemData = {path: '', categoryId: null, subCategoryId: null}
+    data[idx] = itemData
+  }
+
+  if (!isUndefined(path)) {
+    itemData.path = path
+  }
+
+  if (!isUndefined(category)) {
+    const catProp = isSubCategory ? 'subCategoryId' : 'categoryId'
+
+    if (!isSubCategory && category.id !== itemData.categoryId) {
+      itemData.subCategoryId = null
+      console.log(`syncPathAndCategoryConfig RESET `)
+    }
+
+    Object.assign(itemData, {[catProp]: category.id})
+  }
+
+  if (typeof skipDriveLetter === 'string') {
+    GLOBAL_DEF.skipDriveLetterClone = skipDriveLetter
+  }
+
+  if (doDel) {
+    data.splice(idx, 1)
+  }
+
+  if (addSkipPath) {
+    GLOBAL_DEF.skipPathForPathAndCategoryClone.push({value: ''})
+  }
+
+  if (skipPathObj) {
+    const {sIndex, value, sDel} = skipPathObj
+
+    if (sDel) {
+      GLOBAL_DEF.skipPathForPathAndCategoryClone.splice(sIndex, 1)
+    }
+    if (typeof value === 'string') {
+      GLOBAL_DEF.skipPathForPathAndCategoryClone[sIndex].value = value
+    }
+  }
+
+  GLOBAL_DEF.pathAndCategoryClone = data
+
+  if (doSave) {
+    GLOBAL_DEF.pathAndCategory = GLOBAL_DEF.pathAndCategoryClone
+    GLOBAL_DEF.skipDriveLetter = GLOBAL_DEF.skipDriveLetterClone
+    GLOBAL_DEF.skipPathForPathAndCategory = GLOBAL_DEF.skipPathForPathAndCategoryClone
+    delete GLOBAL_DEF.pathAndCategoryClone
+    delete GLOBAL_DEF.skipDriveLetterClone
+    delete GLOBAL_DEF.skipPathForPathAndCategoryClone
+  }
+  onUpdate && onUpdate({data})
+  console.log(`syncPathAndCategoryConfig skipDriveLetter ${GLOBAL_DEF.skipDriveLetter} skipDriveLetterClone ${GLOBAL_DEF.skipDriveLetterClone} pathAndCategory `, GLOBAL_DEF.pathAndCategory, 'pathAndCategoryClone ', GLOBAL_DEF.pathAndCategoryClone, 'skipPathForPathAndCategory ', GLOBAL_DEF.skipPathForPathAndCategory, 'skipPathForPathAndCategoryClone ', GLOBAL_DEF.skipPathForPathAndCategoryClone)
+}
+
+function handleProgressOfUpdatingLocalDrives () {
+  popBox({
+    noButton: true,
+    supportCloseBtn: true,
+    onRenderMsg: ({msgWp}) => {
+      const clsName = 'popupUpdatingLocalDrives'
+      const {el: rootEl} = createElement({
+        clsName: clsName + '-root',
+        appendToEl: msgWp
+      })
+      const {el: closeEl} = createElement({
+        clsName: clsName + '-close CursorPointer',
+        appendToEl: msgWp,
+      })
+      closeEl.innerHTML = '&times;'
+
+      const {el: titleEl} = createElement({
+        clsName: clsName + '-title',
+        appendToEl: rootEl,
+        textCont: `${LNG.upAllHddsData}`
+      })
+      let driveWp
+      let alreadyClosed = false
+
+      openWebSocket({
+        url: '/pathAndCategory',
+        onRecvMsg: ({dataObj, closeWs}) => {
+
+          if (!closeEl.dataset.up) {
+            closeEl.dataset.up = 0
+            closeEl.addEventListener('click', (evt) => {
+              if (!alreadyClosed) {
+                closeWs()
+              }
+              closePopBox({})
+            })
+          }
+
+          console.log(`popupUpdatingLocalDrives msg dataObj `, dataObj)
+
+          const {msgType, paths, driveItem, drives, invalidReason, startInnerLoop, endInnerLoop, path: dirPath, innerIndex, countNewItems } = dataObj
+          const doStartOuterLoop = msgType === 'START_OUTER_LOOP'
+          const doEndOuterLoop = msgType === 'END_OUTER_LOOP'
+          const doStartInnerLoop = msgType === 'START_INNER_LOOP'
+          const doEndInnerLoop = msgType === 'END_INNER_LOOP'
+          const isDone = msgType === 'DONE'
+          const drivePathsCls = clsName + '-drivePaths'
+
+          if (isDone) {
+            alreadyClosed = true
+            handleToast({msg: LNG.upSuccessfully, showToast: true})
+            closeWs()
+          }
+
+          if (drives) {
+            const {el: drivesWpEl} = createElement({
+              clsName: clsName + '-drives',
+              appendToEl: rootEl,
+            })
+            drivesWpEl.style.maxHeight = window.innerHeight * 0.76 + 'px'
+            driveWp = drivesWpEl
+
+            for (const drive of drives) {
+              const {driveLetter, driveLabel} = drive
+              const {el: driveEl} = createElement({
+                clsName: clsName + '-drive',
+                appendToEl: drivesWpEl,
+              })
+              driveEl.dataset.letter = driveLetter
+
+              const {el: driveUpEl} = createElement({
+                clsName: clsName + '-driveUp',
+                appendToEl: driveEl,
+              })
+              const {el: driveLetterEl} = createElement({
+                clsName: clsName + '-driveLetter',
+                appendToEl: driveUpEl,
+                textCont: driveLetter + ':',
+              })
+              const {el: driveLabelEl} = createElement({
+                clsName: clsName + '-driveLabel',
+                appendToEl: driveUpEl,
+                textCont: driveLabel,
+              })
+              const {el: driveRightEl} = createElement({
+                clsName: clsName + '-driveRight',
+                appendToEl: driveUpEl,
+              })
+
+              const {el: driveLoaderEl} = createElement({
+                clsName: clsName + '-driveLoader uvLoader',
+                appendToEl: driveRightEl,
+              })
+
+              const {el: driveResultIconEl} = createElement({
+                clsName: clsName + '-driveResultIcon checkmark',
+                appendToEl: driveRightEl,
+                textCont: 'L'
+              })
+
+              const {el: drivePathsEl} = createElement({
+                clsName: drivePathsCls,
+                appendToEl: driveEl,
+              })
+            }
+          }
+
+          if (driveWp && driveItem) {
+            const {driveLetter} = driveItem
+            const driveEl = driveWp.querySelector(`[data-letter="${driveLetter}"]`)
+            const clsRunning = 'running'
+            const clsDone = 'done'
+
+            if (doStartOuterLoop) {
+              addClass(driveEl, clsRunning)
+            }
+            if (doEndOuterLoop) {
+              removeClass(driveEl, clsRunning)
+              addClass(driveEl, clsDone)
+            }
+            const drivePathsEl = driveEl.querySelector('.' + drivePathsCls)
+            if (paths) {
+              for (let i = 0; i < paths.length; i++) {
+                const path = paths[i]
+                const {el: pathEl} = createElement({
+                  clsName: clsName + '-path',
+                  appendToEl: drivePathsEl,
+                })
+                pathEl.dataset.index = i
+
+                const {el: pathLoaderEl} = createElement({
+                  clsName: clsName + '-pathLoader uvLoader',
+                  appendToEl: pathEl,
+                })
+                const {el: pathCheckEl} = createElement({
+                  clsName: clsName + '-pathCheck checkmark',
+                  appendToEl: pathEl,
+                  textCont: 'L'
+                })
+                const {el: pathInvalidIconEl} = createElement({
+                  clsName: clsName + '-pathInvalidIcon',
+                  appendToEl: pathEl,
+                })
+                pathInvalidIconEl.innerHTML ='&times;'
+
+                const {el: pathLabelEl} = createElement({
+                  clsName: clsName + '-pathLabel',
+                  appendToEl: pathEl,
+                  textCont: path,
+                })
+              }
+            }
+
+            const findPathEl = drivePathsEl && drivePathsEl.querySelector(`[data-index="${innerIndex}"]`)
+
+            if (invalidReason && findPathEl && doStartInnerLoop) {
+              addClass(findPathEl, 'invalid')
+              console.log(`doStartInnerLoop HEIGHT `, findPathEl.parentNode.parentNode.clientHeight, findPathEl.parentNode.parentNode)
+              const {el: pathInvalidReasonEl} = createElement({
+                clsName: clsName + '-pathInvalidReason',
+                appendToEl: findPathEl,
+                textCont: invalidReason,
+              })
+            }
+            if (doStartInnerLoop) {
+              const drivesWpHeight = driveWp.clientHeight
+              const drivesWpScrollTop = driveWp.scrollTop
+              const driveElOffTop = driveEl.offsetTop
+              const driveElHeight = driveEl.clientHeight
+              const requiredScrollH = driveElOffTop - drivesWpHeight + driveElHeight
+
+              console.log(`DriveLetter ${driveLetter}
+                drivesWpHeight ${drivesWpHeight}
+                driveElOffTop ${driveElOffTop}
+                driveElHeight ${driveElHeight}
+                requiredScrollH ${requiredScrollH} - drivesWpScrollTop ${drivesWpScrollTop}
+              `)
+
+              if (requiredScrollH > 0 && drivesWpScrollTop < requiredScrollH) {
+                driveWp.scrollTo(0, requiredScrollH)
+              }
+            }
+            if (!invalidReason && doStartInnerLoop && findPathEl) {
+              addClass(findPathEl, 'running')
+            }
+            if (!invalidReason && doEndInnerLoop && findPathEl) {
+              removeClass(findPathEl, 'running')
+              addClass(findPathEl, 'done')
+
+              if (countNewItems) {
+                const {el: pathCountEl} = createElement({
+                  clsName: clsName + '-pathCount',
+                  appendToEl: findPathEl,
+                  textCont: `+${countNewItems}`,
+                })
+              }
+            }
+          }
+        }
+      })
+    }
+  })
 }

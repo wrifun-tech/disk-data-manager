@@ -1,13 +1,13 @@
 {
   "name": "storage-data-manager",
-  "version": "1.0.0",
+  "version": "1.8.19",
   "description": "Manage all you hard disk drive data with a very easy UI and highly customizable configuration.",
   "main": "src/bin/server",
   "author": "Wrifun Tech",
   "license": "GNU GPLv3",
   "repository": "wrifun-tech/storage-data-manager",
-	"engines": {
-		"node": ">=12.0.0"
+  "engines": {
+    "node": ">=12.0.0"
   },
   "keywords": [
     "hard disk drive data",
@@ -64,7 +64,7 @@
       ]
     },
     "portable": {
-      "artifactName": "StorageDataManager-v1.0.0-portable.exe"
+      "artifactName": "StorageDataManager-v1.8.19-portable.exe"
     },
     "nsis": {
       "oneClick": false,
@@ -73,13 +73,14 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "directories":{
-      "buildResources":"resources",
-      "output":"release"
+    "directories": {
+      "buildResources": "resources",
+      "output": "release"
     },
     "publish": null
   },
   "dependencies": {
+    "@koa/router": "^12.0.0",
     "dotenv": "6.2.0",
     "electron-node-config": "^1.1.0",
     "fs-extra": "9.0.1",
@@ -97,6 +98,7 @@
     "koa-router": "7.4.0",
     "koa-send": "^5.0.0",
     "koa-views": "^7.0.1",
+    "koa-websocket": "^6.0.0",
     "koa-x-request-id": "2.0.0",
     "nunjucks": "^3.2.3",
     "p-event": "2.1.0",
@@ -110,10 +112,12 @@
     "systeminformation": "^5.8.6",
     "tcp-port-used": "^1.0.2",
     "validator": "10.10.0",
+    "ws": "^8.13.0",
+    "yargs": "16.2.0",
     "yup": "0.26.6"
   },
   "devDependencies": {
-    "electron": "^13.1.7",
+    "electron": "^13.5.1",
     "electron-builder": "22.11.3",
     "nodemon": "1.18.9",
     "prettier": "1.15.3"

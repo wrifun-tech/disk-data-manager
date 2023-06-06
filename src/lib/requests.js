@@ -3,6 +3,7 @@ const fsExtra = require('fs-extra')
 const path = require('path')
 const request = require('request')
 const slug = require('slug')
+const https = require("https");
 const req = require('request-promise')
 const db = require("./db")
 const {handleExtraJson, sleep} = require('../utils/fileData')
@@ -10,8 +11,9 @@ const {tl} = require('../utils/locale')
 const mdbUri = 'https://api.themoviedb.org/3'
 const imgHost = 'https://image.tmdb.org'
 const mdbImgUrl = `${imgHost}/t/p/w500/`
-
+const {APP_COMMON_CONF} = require('../constant/common')
 const assert = require('http-assert')
+const {validJson} = require('../utils/basicHelpers')
 
 const makeReq = async (options) => {
 
@@ -39,6 +41,11 @@ const makeReq = async (options) => {
 
   if (mdbRelated) {
     opts.uri = mdbUri + uri
+    if (!opts.agent) {
+      opts.agent =  new https.Agent({});
+    }
+    console.log(`opts.agent `, opts.agent)
+    opts.agent.rejectUnauthorized = false
   }
 
   if (isGet) {
@@ -81,69 +88,73 @@ function videoResPath () {
     creditDestPath: path.join(bDir, 'credits'),
   }
 }
-const dlImg = async (params, callback) => {
+const downloadFile = async (params, callback) => {
   const {
-    filename,
-    filePath,
-    copyFile,
-    createDescFile,
-    dlPath,
-    destPath,
-    fileTmpPath,
+    filename, type, fileExt = 'jpg', mdbItemPath, fileUrl,
+    onDone
   } = params
-  const imgPath = dlPath || filename
-  const imgUrl = mdbImgUrl + imgPath
-  const tmpFilePath = path.join(fileTmpPath, filename)
-  const tPath = copyFile ? tmpFilePath : filePath
-  const txtExt = '.txt'
-  const tDestPath = destPath ? path.join(destPath, filename) : tPath
-  const fileAlready = (fPath) => fs.existsSync(fPath)
+  const fileTypes = [
+    {
+      type: 'cover',
+      dirPath: videoResPath().coverDestPath,
+    },
+    {
+      type: 'credit',
+      dirPath: videoResPath().creditDestPath,
+    },
+  ]
+  const res = {
+    didGet: false,
+    err: '',
+    originalErr: null,
+    filename,
+  }
+  const fileType = fileTypes.find(typeItem => typeItem.type === type)
   const createIfNotFoundDir = async (path) => {
     if (!fs.existsSync(path)) {
       fsExtra.mkdirpSync(path)
     }
   }
-  const {coverTmpPath, creditTmpPath, coverDestPath, creditDestPath} = videoResPath()
-  await createIfNotFoundDir(coverTmpPath)
-  await createIfNotFoundDir(creditTmpPath)
-  await createIfNotFoundDir(coverDestPath)
-  await createIfNotFoundDir(creditDestPath)
-
-  if (fileAlready(tPath)) {
-    let retryCount = 0
-    const checkIfDlFinished = async () => {
-      if (retryCount > 8) {
-        return callback({ failedToDl: true })
-      }
-      if (fileAlready(tDestPath)) return callback && callback()
-      await sleep(1500)
-      retryCount += 1
-      return checkIfDlFinished()
-    }
-    return checkIfDlFinished()
+  const gotFile = (fPath) => fs.existsSync(fPath)
+  const onFinished = () => {
+    onDone && onDone(res)
   }
+  console.log(`downloadFile fileType ${fileType} `)
+  if (fileType) {
+    const {dirPath} = fileType
+    await createIfNotFoundDir(dirPath)
+    const tFileName = filename + '.' + fileExt
+    const filePath = path.join(dirPath, tFileName)
+    const tmpFilePath = path.join(dirPath, tFileName + '.tmp')
+    const alreadyGot = gotFile(filePath)
 
-  if (fileAlready(tDestPath)) {
-    return callback && callback()
-  }
-  request.head(imgUrl, (err, res, body) => {
+    alreadyGot && onFinished(res)
+    if (!alreadyGot) {
+      if (gotFile(tmpFilePath)) {
+        fs.unlinkSync(tmpFilePath, err => null)
+      }
 
-    if (err) {
-      throw err
+      const downloadUrl = fileUrl || (mdbItemPath && mdbImgUrl + mdbItemPath) || null
+
+      if (downloadUrl) {
+        request.head(downloadUrl, (err, res, body) => {
+          if (err) {
+            console.warn('request.head(downloadUrl WARN ', err)
+            res.err = err.toString()
+            res.originalErr = err
+            return onFinished
+          }
+          request(downloadUrl).pipe(fs.createWriteStream(tmpFilePath)).on('close', () => {
+            console.log(`downloadUrl ${downloadUrl} ===================  `)
+            fs.renameSync(tmpFilePath, filePath)
+            res.didGet = true
+            res.filePath = filePath
+            onFinished()
+          })
+        })
+      }
     }
-    request(imgUrl).pipe(fs.createWriteStream(tPath)).on('close', () => {
-      if (copyFile && destPath) {
-        fs.copyFileSync(tPath, tDestPath)
-        if (createDescFile) {
-          fs.writeFileSync(path.join(destPath, createDescFile + txtExt), '')
-        }
-      }
-      if (copyFile && tPath) {
-        fs.unlinkSync(tPath, err => null)
-      }
-      callback && callback()
-    });
-  })
+  }
 }
 
 const deepClone = (obj) => {
@@ -163,150 +174,36 @@ const clearDir = (dirPath) => {
   return true
 }
 
-const storePic = async (mediaid, onFinish) => {
-  if (!mediaid) return false
-  const item = await db('videos').first().where({mediaid})
-  const {coverTmpPath, creditTmpPath, coverDestPath, creditDestPath} = videoResPath()
+const fixTmdbImgUrl = (params) => {
+  const {videos = [], artists = []} = params || {}
+  const serverPath = APP_COMMON_CONF.serverConf && APP_COMMON_CONF.serverConf.server && `http://${APP_COMMON_CONF.serverConf.server.host}:${APP_COMMON_CONF.serverConf.server.port}`
+  const hostMediaPath = serverPath && (serverPath + '/medias')
+  const assignUrl = ({id, originalPath, imgType = 'covers'}) => {
+    console.log(`fixTmdbImgUrl APP_COMMON_CONF.serverConf ${JSON.stringify(APP_COMMON_CONF.serverConf)}`)
+    const rUrl = (id && hostMediaPath) ? `${hostMediaPath}/${imgType}/${id}.jpg` : (originalPath && `${mdbImgUrl}${originalPath}`)
 
-  if (!item) {
-    return console.error(`StorePic: Cannot find this video`)
-  }
-  const itemDetail = typeof item.detail === 'object' ? item.detail : item.detail ? JSON.parse(item.detail) : {}
-  const itemCredits = typeof item.credits === 'object' ? item.credits : item.credits ? JSON.parse(item.credits) : {}
-  MEDIA_DL_STATUS[mediaid] = 0
-  const { id, poster_path, title, name } = itemDetail
-  const oName = title || name
-  const ext = '.jpg'
-  const filename = id + ext
-  const dlStatus = {
-    cover: false,
-    credits: false,
-  }
-  const idsDone = {
-    cover: '',
-    credits: [],
+    return rUrl
   }
 
-  const optionsForCover = {
-    filename,
-    dlPath: poster_path,
-    destPath: coverDestPath,
-    copyFile: true,
-    fileTmpPath: coverTmpPath,
-    createDescFile: slug(`${id} ${oName}`),
-  }
+  for (const v of videos) {
+    const dObj = typeof v.detail === 'object' ? v.detail : (v.detail && validJson(v.detail) && JSON.parse(v.detail))
+    const originalPath = dObj && dObj.poster_path || v.poster_path || null
+    v.coverUrl = assignUrl({id: v.cover, originalPath})
 
-  if (poster_path) {
-    dlImg(optionsForCover, () => {
-      dlStatus.cover = true
-      idsDone.cover = mediaid
-    })
-  }
-  else {
-    dlStatus.cover = true
-  }
-
-  const { crew, cast } = itemCredits
-  const itemsHaveImg = []
-  const appendedIds = []
-
-  const creditsImg = (pList) => {
-    if (!Array.isArray(pList) || pList.length <= 0) return false
-
-    pList.forEach(cItem => {
-      if (!cItem.profile_path) return false
-      if (appendedIds.includes(cItem.id)) return false
-      appendedIds.push(cItem.id)
-      itemsHaveImg.push(cItem)
-    })
-    return true
-  }
-
-  creditsImg(crew)
-  creditsImg(cast)
-
-  const updateItem = async (val) => {
-    return await db('videos').where({ mediaid }).update({ 'stored_pics': val })
-  }
-
-  if (!itemsHaveImg.length) {
-    dlStatus.credits = true
-  }
-  const itemsIds = itemsHaveImg.map(cItem => cItem.id)
-  const finishedIds = []
-  let hasErr = false
-
-  itemsHaveImg.forEach(cItem => {
-
-    const { profile_path, id: pId, name } = cItem
-    const cName = pId + ext
-    const optionsForCredit = {
-      filename: cName,
-      dlPath: profile_path,
-      destPath: creditDestPath,
-      copyFile: true,
-      fileTmpPath: creditTmpPath,
-      createDescFile: name ? slug(`${pId} ${name}`) : null,
+    if (!v.coverUrl) {
+      v.coverUrl = hostMediaPath ? `${hostMediaPath}/img/noimage.png` : null
     }
-
-    dlImg(optionsForCredit, (params) => {
-      if (params && params.failedToDl) {
-        hasErr = true
-        return false
-      }
-      finishedIds.push(pId)
-      dlStatus.credits = (finishedIds.length === itemsIds.length)
-    })
-  })
-
-  const checkStatus = async () => {
-    await sleep(2000)
-    if (dlStatus.cover && dlStatus.credits) {
-      hasErr = false
-      MEDIA_DL_STATUS[mediaid] = 1
-      console.log(mediaid + ' has finished all downloads')
-      idsDone.credits = finishedIds
-      await updateItem(JSON.stringify(idsDone))
-      onFinish && onFinish()
-      return true
-    }
-
-    return !hasErr && checkStatus()
   }
-  return checkStatus()
+  for (const a of artists) {
+    a.avatarUrl = assignUrl({id: a.avatar, originalPath: a.profile_path, imgType: 'credits'})
+    if (!a.avatarUrl) {
+      a.avatarUrl = hostMediaPath ? `${hostMediaPath}/img/noimage.png` : null
+    }
+  }
 }
 
-const bulkDl = async () => {
-  const vItems = await db('videos').where('stored_pics', null)
-  const videos = vItems
-  const {coverTmpPath, creditTmpPath} = videoResPath()
-
-  if (!videos.length) return false
-
-  clearDir(coverTmpPath)
-  clearDir(creditTmpPath)
-
-  const vSliced = videos.slice(0, 10)
-  const idsBeingDled = vSliced.map(vItem => vItem.mediaid)
-  const storePicCallback = () => {
-    const newItem = videos[idsBeingDled.length]
-    if (!newItem || idsBeingDled.includes(newItem.mediaid)) {
-      return false
-    }
-    idsBeingDled.push(newItem.mediaid)
-    storePic(newItem, storePicCallback)
-  }
-
-  vSliced.forEach(vItem => {
-    storePic(vItem, storePicCallback)
-  })
-
-}
-const MEDIA_DL_STATUS = {}
 exports.makeReq = makeReq
-exports.dlImg = dlImg
+exports.downloadFile = downloadFile
 exports.deepClone = deepClone
 exports.sleep = sleep
-exports.storePic = storePic
-exports.bulkDl = bulkDl
-exports.MEDIA_DL_STATUS = MEDIA_DL_STATUS
+exports.fixTmdbImgUrl = fixTmdbImgUrl

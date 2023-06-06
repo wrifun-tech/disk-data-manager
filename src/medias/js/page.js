@@ -701,6 +701,10 @@ function loadServerConfig () {
   if (validJson(conf)) {
     Object.assign(GLOBAL_DEF.serverConf, JSON.parse(conf))
   }
+  const allOptWp = document.querySelectorAll('.select-label-options-r')
+  Array.from(allOptWp).forEach(el => {
+    el.style.maxHeight = window.innerHeight * 0.6 + 'px'
+  })
 }
 function fixProxyElPlaceholder () {
   const pClass = 'st-proxy'
@@ -735,9 +739,12 @@ function toggleSearchPanel ({dir}) {
   const eBg = document.querySelector('.h-bg')
   if (eDown) {
     eDown.style.display = isDown ? 'none' : 'flex'
+    eHeader.classList.add('hideEl')
   }
+  console.log(`toggleSearchPanel `, eHeader)
   eHeader.style.maxHeight = isDown ? 'none' : 0
   eBg.style.top = `${eHeader.clientHeight}px`
+  eHeader.classList.remove('hideEl')
 }
 window.onload = () => {
   handleGlobalData({doGet: true})
@@ -766,6 +773,7 @@ window.onload = () => {
   })
   getConfig({
     onSuccessUp () {
+      console.log(`GLOBAL_DEF `, GLOBAL_DEF)
       fixDocTitle()
       addHeaderProp()
       setBtnToggleSearchBg()
@@ -774,6 +782,15 @@ window.onload = () => {
       handleQueryInputEvents()
       handleDriveLabelEvent()
       watchVideoRelatedEvents()
+
+      syncSelectedCategory()
+      if (GLOBAL_DEF.categories.length) {
+        loadCategory()
+      }
+      if (GLOBAL_DEF.subCategoryDisplayForFilter.length) {
+        loadSubCategory()
+      }
+      
       onModalLoad()
       addVideoInfo()
       fixHBg()
@@ -787,6 +804,7 @@ window.onload = () => {
       handleSortSign({sortVal: GLOBAL_DEF.filter.sortBy, checked: GLOBAL_DEF.filter.reverseOrder})
       searchFiles()
       assignLocale()
+      console.log(`GLOBAL_DEF ---------------------------- `, GLOBAL_DEF)
     }
   })
 }

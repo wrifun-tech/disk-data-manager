@@ -1,5 +1,6 @@
 require("../lib/bootstrap")
-const {initServerAddr, solveAppConf} = require('../utils/fileData')
+const {initServerAddr, solveAppConf, downloadMissingImages} = require('../utils/fileData')
+const {updateDatabase} = require('../lib/updateDatabase')
 
 async function runServer () {
   await solveAppConf()
@@ -17,11 +18,13 @@ async function runServer () {
 
   try {
     const db = require("../lib/db")
+    await updateDatabase()
     await db.select(db.raw("1"))
     console.debug("Database connected")
 
     server = await createServerAndListen(app, port, host)
     getLocaleData()
+    downloadMissingImages()
     APP_COMMON_CONF.serverIsReady = 1
     console.debug(`Server is listening on: ${host}:${port}`)
 

@@ -5,6 +5,7 @@ const {APP_COMMON_CONF, APP_OTHER_CONF} = require('../constant/common')
 const {app: electronApp} = require("electron")
 const fs = require('fs')
 const fsExtra = require('fs-extra')
+const {validJson} = require('./basicHelpers')
 
 module.exports.getDataType = ({byId, byProp, locale}) => {
   const types = [
@@ -118,7 +119,8 @@ async function solveAppConf () {
     const extraDataJsonSamplePath = replaceAsarDir(`${extraDataJsonPath}.sample`)
     if (!fs.existsSync(replaceAsarDir(extraDataJsonPath)) && fs.existsSync(extraDataJsonSamplePath)) {
       console.log(`Found sample extraDataJson`, extraDataJsonSamplePath)
-      fsExtra.renameSync(extraDataJsonSamplePath, replaceAsarDir(extraDataJsonPath))
+      // fsExtra.renameSync(extraDataJsonSamplePath, replaceAsarDir(extraDataJsonPath))
+      fsExtra.copyFileSync(extraDataJsonSamplePath, replaceAsarDir(extraDataJsonPath))
     }
   }
   if (!electronApp) {
@@ -159,6 +161,7 @@ async function solveAppConf () {
     if (fs.existsSync(newDataDir)) {
       try {
         const files = fs.readdirSync(newDataDir)
+        console.log(`files `, files)
         requiredFiles = oFileList.filter(aFile => !files.includes(aFile.file))
       }
       catch (err) {
@@ -178,9 +181,14 @@ async function solveAppConf () {
             fPath = path.join(dataDirPath, file.file + '.sample')
             console.log(`Sample file path ${file.file}: `, fPath)
           }
+          console.log(`FILE ${file.file} ${fPath} `, fs.existsSync(fPath))
           if (fs.existsSync(fPath)) {
             const nPath = path.join(newDataDir, file.file)
-            fsExtra.copyFileSync(fPath, nPath)
+            const gotNPath = fs.existsSync(nPath)
+            console.log(`gotNPath ${gotNPath} \nnPath ${nPath} \nfPath ${fPath}`)
+            if (!gotNPath) {
+              fsExtra.copyFileSync(fPath, nPath)
+            }
             rFileNames.push(file.file)
           }
         }
@@ -219,7 +227,7 @@ function altAssetsDir (params) {
 }
 
 async function handleExtraJson (params) {
-  const {labelName, potentialDup, proxy, toUp, bounds, maxStrLen, tmdbKey} = params || {}
+  const {labelName, potentialDup, proxy, toUp, bounds, maxStrLen, tmdbKey, } = params || {}
   const {APP_COMMON_CONF: ACC} = require('../constant/common')
   let ePath = ACC.extraDataFilePath || (toUp && toUp.extraDataFilePath) || path.join(__dirname, '../../data/hdd-extra-data.json')
   ePath = replaceAsarDir(ePath)
@@ -260,6 +268,7 @@ async function handleExtraJson (params) {
     jsonData.bounds = bounds
     hasUp = true
   }
+  // console.log(`jsonData ${hasUp} `, toUp && JSON.stringify(toUp), jsonData)
   if (hasUp) {
     try {
       await fsExtra.writeJSONSync(ePath, jsonData)
@@ -329,6 +338,51 @@ async function restoreWindowPosition ({displays}) {
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
+
+async function downloadMissingImages (params) {
+  const {videos, artists} = params || {}
+  const db = require('../lib/db')
+  const {downloadFile} = require('../lib/requests')
+  const missingCovers = videos || (await db('videos').whereNull('cover'))
+
+  for (const item of missingCovers) {
+    console.log(`downloadMissingImages item `, item.mediaid)
+    const details = item.detail
+
+    if (details && validJson(details)) {
+      const detailsObj = JSON.parse(details)
+
+      if (detailsObj.poster_path) {
+        downloadFile({
+          filename: item.mediaid,
+          mdbItemPath: detailsObj.poster_path,
+          type: 'cover',
+          async onDone (res) {
+            console.log(`Finished DL img VideoId ${item.mediaid} `)
+            if (!res.err) {
+              await db('videos').where({mediaid: item.mediaid}).update({cover: item.mediaid})
+            }
+          }
+        })
+      }
+    }
+  }
+
+  const missingAvatars = artists || (await db('video_artist').whereNull('avatar').whereNotNull('profile_path'))
+  for (const item of missingAvatars) {
+    downloadFile({
+      filename: item.id,
+      mdbItemPath: item.profile_path,
+      type: 'credit',
+      async onDone (res) {
+        console.log(`Finished DL img ItemId ${item.id} `)
+        if (!res.err) {
+          await db('video_artist').where({id: item.id}).update({avatar: item.id})
+        }
+      }
+    })
+  }
+}
 module.exports.replaceAsarDir = replaceAsarDir
 module.exports.checkPortUsage = checkPortUsage
 module.exports.initServerAddr = initServerAddr
@@ -337,6 +391,7 @@ module.exports.solveAppConf = solveAppConf
 module.exports.altAssetsDir = altAssetsDir
 module.exports.handleExtraJson = handleExtraJson
 module.exports.sleep = sleep
+module.exports.downloadMissingImages = downloadMissingImages
 module.exports.onWindowResizeOrMove = onWindowResizeOrMove
 module.exports.restoreWindowPosition = restoreWindowPosition
 module.exports.escapeRegExp = escapeRegExp

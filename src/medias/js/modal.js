@@ -184,8 +184,7 @@ function videoItems (params) {
         eTitle.innerHTML = tTitle
       }
       // console.log(`handleVideoItemHtml tTitle:::::::::${tTitle}`)
-      const tCover = getCoverUrl(storedPics, posterPath)
-      eCover.src = tCover
+      eCover.src = rItem.coverUrl
       eType.innerHTML = mediaType || rItem.mediaType || ''
       eSynopsis.innerHTML = overview
       eYear.innerHTML = releaseDate || firstAirDate || ''
@@ -201,15 +200,11 @@ function videoItems (params) {
         eCountries.innerHTML = tCountries
       }
 
-      const tCredits = rItem.credits || {}
-      const tCrew = tCredits.crew || []
-      const tCast = tCredits.cast || []
-      const hasCrew = (Array.isArray(tCrew) && tCrew.length > 0)
-      const hasCast = (Array.isArray(tCast) && tCast.length > 0)
-      const creditsAvailable = (hasCrew || hasCast)
+      const tCast = rItem.cast || []
+      const hasCast = tCast.length > 0
       const eCredits = eVideo.querySelector('.video-credits')
-      // console.log('???????????????????????? ============', creditsAvailable)
-      creditsAvailable ? removeClass(eCredits, 'hidden') : addClass(eCredits, 'hidden')
+      console.log('???????????????????????? ============', rItem)
+      hasCast ? removeClass(eCredits, 'hidden') : addClass(eCredits, 'hidden')
     })
   }
 
@@ -426,24 +421,15 @@ function showCredits () {
 
   const tIndex = eVideo.dataset.index
   const videoItem = DATA_HELPERS.queriedVideos[tIndex]
-  const storedPics = videoItem.storedPics ? JSON.parse(videoItem.storedPics) : {}
-  const sCredits = storedPics.credits || []
-  const tCrew = videoItem.credits.crew || []
-  const tCast = videoItem.credits.cast || []
-  const displayCrew = ['director', 'screenplay', 'writer']
-  const findThem = tCrew.filter(cItem => cItem.job && displayCrew.includes(cItem.job.toLowerCase()))
 
-  findThem.sort((aItem, bItem) => {
-    return displayCrew.indexOf(aItem.job.toLowerCase()) - displayCrew.indexOf(bItem.job.toLowerCase())
-  })
 
-  const list = [findThem, tCast.slice(0, 6)]
+  const list = videoItem.cast
   const rowHtml = eRows.innerHTML
-
+  console.log(`showCredits videoItem `, videoItem, list.length)
   generateItemsHtml({
     eHost: eRows,
     childHtml: rowHtml,
-    dataLen: list.length,
+    dataLen: 1,
   })
 
   const newRows = [...eVideo.querySelectorAll('.video-credits-row')]
@@ -453,7 +439,7 @@ function showCredits () {
     generateItemsHtml({
       eHost: rItem,
       childHtml: itemHtml,
-      dataLen: tList.length,
+      dataLen: list.length,
     })
 
     const eItems = [...rItem.querySelectorAll('.video-credit')]
@@ -463,14 +449,15 @@ function showCredits () {
       const eName = eItem.querySelector('.video-credit-name')
       const eRole = eItem.querySelector('.video-credit-role')
 
-      const itemContent = tList[eKey]
-      const { name, character, job, profilePath, id } = itemContent
+      const itemContent = list[eKey]
+      const { name, character, job, avatarUrl, id } = itemContent
       // console.log(sCredits, id, tCast.map(tItem => tItem.id))
-      const imgUrl = sCredits.includes(id) ? makeCreditUrl(id) : staticUrls().noImage
-      eImg.style.backgroundImage = `url('${imgUrl}')`
+      if (avatarUrl) {
+        eImg.style.backgroundImage = `url('${avatarUrl}')`
+      }
 
       eName.innerHTML = name
-      eRole.innerHTML = job || character || LNG.Unknown
+      eRole.innerHTML = job || character || ''
     })
   })
 }

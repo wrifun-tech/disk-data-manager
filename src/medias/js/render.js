@@ -137,7 +137,6 @@ function handleVideoInfoElement ({rootEl, vInfo}) {
 
   let oTitle = vInfo.original_title || ''
   let nTitle = oTitle
-  let coverUrl = ''
   let countries = ''
   const details = vInfo.detail && JSON.parse(vInfo.detail)
   const sPics = validJson(vInfo.stored_pics) ? JSON.parse(vInfo.stored_pics) : {}
@@ -150,9 +149,8 @@ function handleVideoInfoElement ({rootEl, vInfo}) {
   }
 
   divName.appendChild(vSummary)
-  // console.log(`COVERURL::::`, coverUrl)
-  if (coverUrl) {
-    vSummaryCover.src = coverUrl
+  if (vInfo.coverUrl) {
+    vSummaryCover.src = vInfo.coverUrl
     vSummaryCover.width = 60
     vSummary.appendChild(vSummaryCover)
   }

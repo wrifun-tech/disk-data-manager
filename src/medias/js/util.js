@@ -27,6 +27,8 @@ const GLOBAL_DEF = {
   deepscanPath: [],
   formatFileName: [],
   collectionSymbol : [],
+  clearDataBeforeAdding: 0,
+  keepThoseWatchedVideos: 0,
   driveLabels: [],
   potentialDup: 'keep',
   lastModalType: '',
@@ -37,6 +39,10 @@ const GLOBAL_DEF = {
   serverConf: {},
   proxy: '',
   tmdbKey: '',
+  pathAndCategory: [],
+  skipDriveLetter: '',
+  skipPathForPathAndCategory: [],
+  skipPathForPathAndCategoryClone: [],
 }
 const DATA_HELPERS = {
   queryVideoItem: null, queryVideoPage: 0,
@@ -188,11 +194,17 @@ function handleToast (params) {
     }, 2000)
   }
 }
-function hostUrl () {
+function hostUrl (params) {
+  const {withoutProtocol} = params || {}
   const vHost = GLOBAL_DEF.serverConf.server.host || 'localhost'
   const vPort = GLOBAL_DEF.serverConf.server.port || ''
   const vProtocol = GLOBAL_DEF.serverConf.isHttps ? 'https' : 'http'
-  const vUrl = `${vProtocol}://${vHost}${vPort ? ':' + vPort : ''}`
+  const vPathUrl = `${vHost}${vPort ? ':' + vPort : ''}`
+  const vUrl = `${vProtocol}://${vPathUrl}`
+
+  if (withoutProtocol) {
+    return vPathUrl
+  }
   return vUrl
 }
 function apiRequest (params) {
@@ -250,6 +262,9 @@ function scrollbarVisible(element) {
 function isObject (obj) {
   var type = typeof obj;
   return type === 'function' || type === 'object' && !!obj;
+}
+function isUndefined (obj) {
+  return typeof obj === 'undefined'
 }
 function formatUrlParams (params, extendedObj={}, removeKeys) {
   if (!params && !extendedObj) return ''
@@ -885,13 +900,14 @@ function removeInvalidKeys (params) {
 }
 
 function onFilterCategoryChange ({catId, subCatId, doReRender, dataObj, loadCategoryFn, loadSubCategoryFn}) {
-  console.log(`onFilterCategoryChange:::::::::`, arguments)
+  console.log(`onFilterCategoryChangeFn:::::::::`, arguments)
   let doReRenderSub = false
   let doReRenderCategory = doReRender || false
   const tDataObj = dataObj || GLOBAL_DEF
-
+  console.log(`onFilterCategoryChangeFn GLOBAL_DEF `, JSON.parse(JSON.stringify(GLOBAL_DEF)), dataObj)
   if (catId) {
     let findCategory = catId > 0 && tDataObj.categories.find(c => c.id === catId)
+    console.log(`onFilterCategoryChangeFn findCategory `, findCategory)
     tDataObj.filter.category = findCategory || null
 
     const hasSub = tDataObj.filter.category && tDataObj.filter.category.subCategories && tDataObj.filter.category.subCategories.length > 0
@@ -906,6 +922,8 @@ function onFilterCategoryChange ({catId, subCatId, doReRender, dataObj, loadCate
     if (hasSub) {
       tDataObj.subCategoryDisplayForFilter = [...cloneArray(tDataObj.filter.category.subCategories)]
 
+      appendDefaultSelectionItem(tDataObj.subCategoryDisplayForFilter)
+
       const findSel = tDataObj.subCategoryDisplayForFilter.find(c => c.id === tDataObj.filter.subCategory && tDataObj.filter.subCategory.id)
 
       if (!findSel) {
@@ -913,12 +931,13 @@ function onFilterCategoryChange ({catId, subCatId, doReRender, dataObj, loadCate
         doReRenderSub = true
       }
     }
-
+    handleGlobalData({doSave: true})
   }
   if (subCatId) {
     const findSub = tDataObj.subCategoryDisplayForFilter && tDataObj.subCategoryDisplayForFilter.find(c => c.id === subCatId)
 
     tDataObj.filter.subCategory = findSub || null
+    handleGlobalData({doSave: true})
   }
 
   if (doReRenderCategory) {
@@ -927,6 +946,7 @@ function onFilterCategoryChange ({catId, subCatId, doReRender, dataObj, loadCate
   if (doReRenderSub) {
     loadSubCategoryFn ? loadSubCategoryFn() : loadSubCategory()
   }
+  console.log(`onFilterCategoryChangeFn GLOBAL_DEF ^^^^^^^^^ `, JSON.parse(JSON.stringify(GLOBAL_DEF)))
 }
 
 function handleGlobalData (params) {
@@ -941,7 +961,7 @@ function handleGlobalData (params) {
 
     if (validJson(sData)) {
       const gData = JSON.parse(sData)
-      console.log(`handleGlobalData GET:::::::`, gData)
+      console.log(`handleGlobalDataFN GET:::::::`, gData)
       if (gData && gData.global) {
         Object.assign(GLOBAL_DEF, gData.global)
       }
@@ -953,12 +973,7 @@ function handleGlobalData (params) {
     GLOBAL_DEF.watchingItem = null
     GLOBAL_DEF.videoInfo = []
 
-    if (GLOBAL_DEF.categories.length) {
-      loadCategory()
-    }
-    if (GLOBAL_DEF.subCategoryDisplayForFilter.length) {
-      loadSubCategory()
-    }
+
 
     if (GLOBAL_DEF.driveLabels.length) {
       loadDriveLabelElement()
@@ -1176,4 +1191,92 @@ function getSortByOptions () {
     {prop: 'filesize', label: LNG.filesize},
     {prop: 'drivelabel', label: LNG.driveLabel},
   ]
+}
+
+function getSiblings (params) {
+  const {el, dir = 'next', ignoreTextNode = true, filterByClsName} = params || {}
+  const siblings = []
+  const doGetPrev = dir === 'prev'
+  const sibProp = doGetPrev ? 'previousSibling' : 'nextSibling'
+  const findSibEl = (vEl) => {
+    const sibEl = vEl[sibProp]
+    console.log(`getSiblings ------------ sibEl ${sibProp} `, sibEl)
+    if (sibEl) {
+      const isTextNode = ignoreTextNode && sibEl.nodeType === 3
+      const doFilterByClsName = !filterByClsName || sibEl.className.includes(filterByClsName) === true
+      console.log(`getSiblings isTextNode ${isTextNode} doFilterByClsName ${doFilterByClsName}`)
+      if (!isTextNode && doFilterByClsName) {
+        siblings.push(sibEl)
+      }
+      findSibEl(sibEl)
+    }
+  }
+  findSibEl(el)
+  const length = siblings.length
+  const res = {length, siblings}
+  return res
+}
+
+function countOccurrences (params) {
+  const {list, asPropName = 'name'} = params || {}
+  const findDup = list
+      .reduce((dupRes, item) => {
+        const isItemObj = isObject(item)
+        const toCompareName = isItemObj ? item[asPropName] : item
+        let findItem = dupRes.find(dItem => dItem.name === toCompareName)
+        if (!findItem) {
+          findItem = {...(isItemObj ? item : {}), name: toCompareName, count: 1}
+          dupRes.push(findItem)
+        }
+        else {findItem.count++}
+        return dupRes
+      }, [])
+      .sort((a, b) => {
+        if (b.count > a.count) return 1;
+        return -1;
+      })
+
+
+  const res = {listSortedByOccurrences: findDup, dupMax: null}
+  if (findDup[0] && findDup[0].count > 1) {
+    res.dupMax = findDup[0]
+  }
+  console.log(`countOccurrences RES `, res)
+  return res
+}
+
+function openWebSocket (params) {
+  const {url, protocols = [], onCloseWs, onRecvMsg, urlParams = {}, locale} = params || {}
+  const serverUrl = hostUrl({withoutProtocol: true})
+  console.log(`openWebSocket serverUrl `, serverUrl)
+
+  urlParams.locale = GLOBAL_DEF.locale
+  locale && Object.assign(urlParams, {locale})
+
+  const urlParamsToStr = new URLSearchParams(urlParams)
+  const wsUrl = `ws://${serverUrl}${url}?${urlParamsToStr}`
+  const ws = new WebSocket(
+    wsUrl,
+    [...protocols]
+  )
+  ws.onopen = (event) => {
+    ws.send('test Ws')
+  }
+
+  const closeWs = () => {
+    ws.send('abort')
+    ws.close()
+  }
+
+  ws.onmessage = (event) => {
+    console.log(`WS msg `, event.data);
+    onRecvMsg && onRecvMsg({
+      event,
+      closeWs,
+      data: event.data,
+      dataObj: validJson(event.data) ? JSON.parse(event.data) : null,
+    })
+  };
+
+  onCloseWs && onCloseWs({closeWs})
 }

@@ -95,6 +95,10 @@ function openSettings () {
     formatFileName({val: sFormatName.name, id: sFormatName.id})
   }
 
+  document.querySelector('#clearDataBeforeAdding').checked = !!GLOBAL_DEF.clearDataBeforeAdding
+  document.querySelector('#keepWatched').checked = !!GLOBAL_DEF.keepThoseWatchedVideos
+  onShowKeepWatchedInput(GLOBAL_DEF.clearDataBeforeAdding)
+
   document.querySelector('.st-file-exclusion-list').innerHTML = ''
   for (const dPath of GLOBAL_DEF.fileExclusion) {
     addFileExclusion({val: dPath.name, id: dPath.id})
@@ -713,4 +717,42 @@ function onSetTmdbKey () {
       evtEl.textContent = ''
     }
   })
+}
+function onInputClearDataBeforeAddingChange () {
+  const evtEl = event.target
+  const tVal = Number(evtEl.checked)
+  console.log(`onInputClearDataBeforeAddingChange evtEl `, evtEl.checked)
+  upDataType({
+    prop: 'clearDataBeforeAdding',
+    extra: {clearDataBeforeAdding: tVal},
+    onSuccess () {
+      GLOBAL_DEF.clearDataBeforeAdding = tVal
+      onShowKeepWatchedInput(tVal)
+    },
+    onError () {
+    }
+  })
+}
+function onInputKeepThoseWatchedVideosChange () {
+  const evtEl = event.target
+  const tVal = Number(evtEl.checked)
+  console.log(`onInputKeepThoseWatchedVideosChange evtEl `, evtEl)
+  upDataType({
+    prop: 'keepThoseWatchedVideos',
+    extra: {keepThoseWatchedVideos: tVal},
+    onSuccess () {
+      GLOBAL_DEF.keepThoseWatchedVideos = tVal
+    },
+    onError () {
+    }
+  })
+}
+function onShowKeepWatchedInput (doShow) {
+  const el = document.querySelector('.keepWatched-wp')
+  if (doShow) {
+    el.classList.remove('hidden')
+  }
+  else {
+    el.classList.add('hidden')
+  }
 }

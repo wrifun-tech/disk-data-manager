@@ -1,13 +1,16 @@
 
 const humps = require("humps")
 const db = require("../lib/db")
-const { makeReq, dlImg, deepClone, storePic, MEDIA_DL_STATUS } = require('../lib/requests')
+const { makeReq, fixTmdbImgUrl } = require('../lib/requests')
 const assert = require('http-assert')
-const {removeInvalidKeys, cloneObj, byteLength, chunk, cleanFileName} = require('../utils/basicHelpers')
+const {removeInvalidKeys, cloneObj, byteLength, chunk, cleanFileName, objectPickKeys, objectOmitKeys, validJson} = require('../utils/basicHelpers')
 const {fileSize} = require('../utils/basicHelpers')
-const pyHost = 'http://192.168.1.5:7080'
 const {tl} = require('../utils/locale')
-const {getDataType, sleep} = require('../utils/fileData')
+const {getDataType, sleep, downloadMissingImages} = require('../utils/fileData')
+const mediaUris = {
+  movie: '/movie',
+  tv: '/tv',
+}
 
 module.exports = {
   async searchFiles (ctx) {
@@ -56,7 +59,7 @@ module.exports = {
     if (Number.isInteger(Number(catId))) {
       Object.assign(query, {'file_category.cat_id': Number(catId)})
     }
-    if (Number.isInteger(Number(subCatId))) {
+    if (Number.isInteger(Number(subCatId)) && Number(subCatId) > 0) {
       Object.assign(query, {'file_category.sub_cat_id': Number(subCatId)})
     }
     const hasQuery = Object.keys(query).length > 0
@@ -128,7 +131,7 @@ module.exports = {
         item.watched = 1
       }
       if (item.original_size) {
-        item.readableSize = fileSize(item.original_size).human('si')
+        item.readableSize = fileSize(item.original_size).human()
       }
       if (item.dataTypeId) {
         const fDataType = getDataType({locale, byId: item.dataTypeId}).findType
@@ -143,6 +146,8 @@ module.exports = {
         .leftJoin('file_video', 'file_video.video_id', 'videos.mediaid')
         .where({file_id: item.id})
         .select(['videos.*'])
+
+      fixTmdbImgUrl({videos: item.videos})
     }
     ctx.body = {pageInfo, files: data}
   },
@@ -255,22 +260,6 @@ async function cleanFileData () {
       await db('files').where({id: f.id}).update(tUp)
     }
   }
-}
-
-async function checkImgDl (mId, sDates) {
-  const tDates = sDates || {startAt: new Date(), endAt: null}
-  if (tDates.endAt) {
-    const isOut = (tDates.endAt - tDates.startAt) > 17000
-    if (isOut) {
-      console.info(`checkImgDl ran out of time .....................`)
-      return true
-    }
-  }
-  const isDone = MEDIA_DL_STATUS[mId]
-  if (isDone) return true
-  await sleep()
-  tDates.endAt = new Date()
-  return await checkImgDl(mId, tDates)
 }
 
 async function fixMissingVideoInfo ({ctx}) {
@@ -409,9 +398,9 @@ async function fixMissingVideoInfo ({ctx}) {
     }
   }
   for (const [index, nFile] of files.entries()) {
-    // console.log(`${index} / ${files.length} fixMissingVideoInfo nFile: `, JSON.stringify(nFile))
+    // console.log(`${index} / ${files.length} fixMissingVideoInfo0 nFile: `, JSON.stringify(nFile))
     const fileInfo = {}
-    // console.log(`fixMissingVideoInfo fileInfo: `, JSON.stringify(fileInfo))
+    // console.log(`fixMissingVideoInfo0 fileInfo: `, JSON.stringify(fileInfo))
     if (fileInfo.err) {
       console.error('ERROR ON FILE MATCH VIDEO::::::::::::::', fileInfo.err)
       break
@@ -447,7 +436,7 @@ async function grabVideoDetail (params) {
 }
 async function grabVideoCredits (params) {
   const {mediaid, mUri, locale} = params
-
+  const creditListCleaned = []
   if (mediaid) {
     const fVideo = await db('videos').first().where({mediaid})
     if (fVideo) {
@@ -459,18 +448,95 @@ async function grabVideoCredits (params) {
         sync: true,
       })
       if (credits && credits.data) {
-        await db('videos').where({mediaid}).update({credits: JSON.stringify(credits.data)})
+        const creditList = [...credits.data.crew, ...credits.data.cast]
+
+        const artists = []
+        const pickKeys = ['name', 'original_name', 'popularity', 'gender', 'known_for_department', 'department', 'job', 'profile_path', 'credit_id']
+        creditList.forEach(item => {
+          const findA = artists.find(aItem => aItem.id === item.id)
+          if (!findA) {
+            artists.push({
+              id: item.id,
+              name: item.name,
+              original_name: item.original_name,
+              profile_path: item.profile_path,
+            })
+          }
+          creditListCleaned.push({
+            ...objectPickKeys(item, pickKeys),
+            artist_id: item.id,
+            video_id: Number(mediaid),
+            adult: item.adult ? 1 : 0,
+            extra: JSON.stringify(objectOmitKeys(item, [...pickKeys, 'id', 'adult'])),
+          })
+        })
+        console.log(`creditsData artists ${artists.length} `)
+        console.log(`creditsData creditList ${creditList.length}`)
+        const creditChunk = chunk({list: creditListCleaned, chunkSize: 30})
+        for (const tChunk of creditChunk) {
+          const {newList} = await filterBeforeInsert({
+            list: tChunk,
+            idProp: 'video_id',
+            dbName: 'cast',
+            idColumnName: 'video_id',
+            propsToCheck: ['video_id', 'artist_id', 'credit_id']
+          })
+          newList.length && (await db('cast').insert(newList, 'id'))
+        }
+
+        const artistsChunk = chunk({list: artists, chunkSize: 30})
+        for (const tChunk of artistsChunk) {
+          const {newList} = await filterBeforeInsert({
+            list: tChunk,
+            dbName: 'video_artist',
+            propsToCheck: ['id']
+          })
+          newList.length && (await db('video_artist').insert(newList, 'id'))
+        }
       }
     }
   }
+  const res = {list: creditListCleaned}
+  return res
 }
-async function downloadVideoImg (params) {
-  const {mediaid} = params
-
-  if (mediaid) {
-    storePic(mediaid)
-    await checkImgDl(mediaid)
-  }
+async function filterBeforeInsert (params) {
+  const {list = [], id, idProp = 'id', dbName, idColumnName = 'id', propsToCheck} = params || {}
+  const idsToCheck = Array.from(new Set(
+    list.map(item => {
+      if (typeof item === 'string' || typeof item === 'number') return item
+      if (typeof item === 'object') return item[idProp]
+      return ''
+    })
+  ))
+  id && idsToCheck.push(id)
+  console.log(`idsToCheck ${idsToCheck.length}`)
+  const findExistingItems = await db(dbName).whereIn(idColumnName, idsToCheck)
+  console.log(`filterBeforeInsert findExistingItems ${findExistingItems.length}`)
+  const filterNotExist = list.filter(cItem => {
+    const findIt = findExistingItems.find(fItem => {
+      let doFind = false
+      if (propsToCheck) {
+        let countOkay = 0
+        for (const aProp of propsToCheck) {
+          const doHave = fItem[aProp] === cItem[aProp]
+          // console.log(`filterBeforeInsert doHave ${doHave} countOkay ${countOkay} aProp ${aProp} `, fItem[aProp], typeof fItem[aProp], cItem[aProp], typeof cItem[aProp])
+          if (doHave) countOkay++;
+        }
+        if (countOkay === propsToCheck.length) {
+          doFind = true;
+        }
+        // console.log(`filterBeforeInsert ${countOkay} doFind ${doFind}`)
+      }
+      else {
+        doFind = fItem === cItem
+      }
+      return doFind
+    })
+    return !findIt
+  })
+  console.log(`filterBeforeInsert newList ${filterNotExist.length}`)
+  const res = {newList: filterNotExist}
+  return res
 }
 async function requestVideoInfo (params) {
   const {mediaid} = params
@@ -503,20 +569,13 @@ async function fileAttachVideoInfo (params) {
 
   let findFileVideo = await db('file_video').first().where({file_id: fileId, video_id: id})
   if (findVideo) {
-    const mediaUris = {
-      movie: '/movie',
-      tv: '/tv',
-    }
     const mUri = mediaUris[findVideo.media_type]
     if (!findVideo.detail) {
       await grabVideoDetail({mediaid: id, mUri, locale})
     }
-    if (!findVideo.credits) {
+    /* if (!findVideo.credits) {
       await grabVideoCredits({mediaid: id, mUri, locale})
-    }
-    if (!findVideo.stored_pics) {
-      await downloadVideoImg({mediaid: id})
-    }
+    } */
   }
   findFileVideo && assert(false, tl({locale, key: 'alreadyAdded'}))
   if (!findFileVideo) {
@@ -524,6 +583,9 @@ async function fileAttachVideoInfo (params) {
   }
   if (!findVideo.detail) {
     findVideo = await db('videos').first().where({mediaid: id})
+  }
+  if (findVideo) {
+    fixTmdbImgUrl({videos: [findVideo]})
   }
   return {response: findVideo}
 }
@@ -558,6 +620,8 @@ async function searchMatchVideo ({queryParams, ctx}) {
       'videos.*', 'file_video.file_id as fileId'
     ])
   const gotVideoIds = videos.map(vItem => vItem.mediaid)
+  const hasDbAssociation = gotVideoIds.length > 0
+
   if (reSearch || !videos.length) {
     let qData = {
       query: titleToQuery,
@@ -599,15 +663,73 @@ async function searchMatchVideo ({queryParams, ctx}) {
     if (vItem.fileId) {
       vItem.videoOrder += 1
     }
-    if (vItem.credits) {
-      vItem.credits = JSON.parse(vItem.credits)
-    }
-    if (vItem.mediaid) {
-      if (!vItem.stored_pics) {
-        await downloadVideoImg({mediaid: vItem.mediaid})
+    if (!vItem.grabbed_cast) {
+      const toParams = {
+        mediaid: vItem.mediaid,
+        mUri: mediaUris[vItem.media_type],
+        locale,
+      }
+      try {
+        const {list} = await grabVideoCredits(toParams)
+        vItem.cast = list
+      }
+      catch (err) {
+        console.error(err)
+      }
+      if (vItem.mediaid && gotVideoIds.includes(vItem.mediaid)) {
+        await db('videos').where({mediaid: vItem.mediaid}).update({grabbed_cast: 1})
       }
     }
+    else {
+      // console.log(`Request vItem `, vItem)
+      const mId = vItem.mediaid || vItem.id
+      if (mId) {
+        vItem.cast = await db('cast')
+          .where('cast.video_id', mId)
+          .leftJoin('video_artist', 'video_artist.id', 'cast.artist_id')
+          .select(['cast.*', 'video_artist.avatar', 'video_artist.profile_path'])
+      }
+    }
+    if (vItem.mediaid && !vItem.cover) {
+      const artists = (vItem.cast || []).map(castItem => ({
+        id: castItem.artist_id,
+        avatar: castItem.avatar,
+        profile_path: castItem.profile_path,
+      }))
+      const artistsUnique = []
+      for (const a of artists) {
+        const findA = artistsUnique.find(aItem => aItem.id === a.id)
+        if (!findA) {artistsUnique.push(a)}
+      }
+      // console.log(`artists `, artistsUnique)
+      downloadMissingImages({videos: [vItem], artists: artistsUnique})
+    }
+
+    if (vItem.cast) {
+      for (const castItem of vItem.cast) {
+        const itemExtra = castItem.extra && validJson(castItem.extra) && JSON.parse(castItem.extra)
+        castItem.order = itemExtra && itemExtra.order || 0
+        castItem.character = itemExtra && itemExtra.character || ''
+      }
+      const cList = []
+      const jobs = ['director', 'screenplay', 'writer']
+      const findDir = vItem.cast.find(castItem => (castItem.job || '').toLowerCase() === jobs[0])
+      const findScr = vItem.cast.find(castItem => (castItem.job || '').toLowerCase() === jobs[1])
+      const findW = vItem.cast.find(castItem => (castItem.job || '').toLowerCase() === jobs[2])
+      findDir && cList.push(findDir)
+      findScr && cList.push(findScr)
+      findW && cList.push(findW)
+      let filtered = vItem.cast.filter(castItem => !castItem.job && castItem.known_for_department === 'Acting')
+      filtered = filtered.sort((aItem, bItem) => {
+        if (aItem.order > bItem.order) return 1
+        return -1
+      })
+      cList.push(...filtered)
+      fixTmdbImgUrl({artists: cList})
+      vItem.cast = cList
+    }
   }
+  fixTmdbImgUrl({videos})
   const vRes = { videos, ...otherResData }
   return vRes
 }

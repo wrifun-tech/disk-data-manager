@@ -1,7 +1,9 @@
 const config = require("electron-node-config")
 const Koa = require("koa")
 const path = require('path')
-const app = new Koa()
+const websockify = require('koa-websocket');
+const app = websockify(new Koa())
+
 
 app.proxy = true
 
@@ -33,6 +35,7 @@ const render = views(viewsDir, {
   }
 })
 
+
 app.use(render)
 app.use(responseTime())
 app.use(xRequestId({ inject: true }, app))
@@ -59,7 +62,7 @@ app.use(
   }),
 )
 app.use(pagerMiddleware)
-app.use(routes.routes())
-app.use(routes.allowedMethods())
+// app.ws.use(wsRouter.routes()).use(wsRouter.allowedMethods())
+app.use(routes.routes()).use(routes.allowedMethods())
 
 module.exports = app
