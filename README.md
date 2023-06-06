@@ -8,12 +8,12 @@
  - Move data between categories.
  - Query file info, at the moment only support movie/tv related stuff (Backed by TMDb, you'll need to supply your own TMDb token if you want to use this feature. [How to get it](https://developers.themoviedb.org/3/getting-started/introduction)). We'll also support music and game stuff very soon. PRs are welcome. 
  - For video file, there you can build your watchlist and watch history. 
- - Localized. But now there are only English and Simplified-Chinese. If you want to translate into your language, please send a PR. Check out data/localization directory, you will have a clue how to archive it.
+ - Localized. But now there are only English and Simplified-Chinese. If you want to translate into your language, please send a PR. Check out data/localization directory, you will have a clue how to achieve it.
  - There are still some other little sugar pies, Come and try it😆.
 
 ### Download and Install
 1) Native Program.
-- For Windows, Download [installer]() or [portable version]().
+- For Windows, Download [installer](https://github.com/wrifun-tech/storage-data-manager/releases/download/v1.0.0/StorageDataManager-Setup-1.0.0.exe) or [portable version](https://github.com/wrifun-tech/storage-data-manager/releases/download/v1.0.0/StorageDataManager-v1.0.0-portable.exe).
 - For Linux or Mac osx, still in testing phase, will be coming soon.
 
 2) Alternatively. 
@@ -26,6 +26,9 @@
 
 ### Let's take a look by watching a video.
 https://user-images.githubusercontent.com/90248822/133627177-3ff6a770-d958-400b-8f2e-1e24f50cfcda.mp4
+
+### Powered by
+<a href="https://www.wrifun.com"><img src="https://static.wrifun.com/medias/images/logo.png" width="60" alt="Wrifun" /></a>
 
 ### License
 GNU GPLv3
